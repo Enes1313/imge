@@ -2,6 +2,7 @@
 #define IMGE_H
 
 #include <QMainWindow>
+#include <image.h>
 
 QT_BEGIN_NAMESPACE
 namespace Ui { class Imge; }
@@ -12,10 +13,12 @@ class Imge : public QMainWindow
     Q_OBJECT
 
 public:
-    Imge(QWidget *parent = nullptr);
+    Imge(const QString& filePath, QWidget* parent = nullptr);
     ~Imge();
 
 private:
-    Ui::Imge *ui;
+    Image image;
+    Ui::Imge* ui;
+    QPalette palette;
 };
 #endif // IMGE_H

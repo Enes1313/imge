@@ -5,6 +5,7 @@
 #include <QBitmap>
 #include <QDebug>
 #include <QDesktopWidget>
+#include <QMouseEvent>
 
 //TODO: Fare tekerleği ile labelin pozisyonunun değişmesi.
 //TODO: Pencere full iken Fare bir kez tıklandığında, pencerenin küçüklmesi.
@@ -16,35 +17,11 @@ Imge::Imge(const QString& filePath, QWidget* parent) : QMainWindow{parent}, imag
 {
     ui->setupUi(this);
 
-    /*
-     *  Background image, TODO: siyahlaştırma.
-     */
-
-    QScreen* screen = QGuiApplication::primaryScreen();
-    /*if (const QWindow* window = windowHandle())
-        screen = window->screen();*/
-    QPixmap bkgnd{screen->grabWindow(0)};
-    //bkgnd = bkgnd.scaled(this->size(), Qt::IgnoreAspectRatio);
-    /*
-    auto active_window = qApp->activeWindow();
-    if (active_window) //could be null if your app doesn't have focus
-    {
-        QPixmap pixmap(active_window->size());
-        active_window->render(&pixmap);
-        ui->label->setPixmap(pixmap);
-    }
-    */
-
-    palette.setBrush(QPalette::Background, bkgnd);
-    setPalette(palette);
-
-    /*
-     *  read image and show, TODO: image sınıfına yaptırılmalı.
-     */
+    takeAScreenShot();
 
     int x, y;
     QPixmap pix{QPixmap::fromImage(image.getImage())};
-    QRect screenGeometry = QApplication::desktop()->screenGeometry();
+    QRect screenGeometry = QGuiApplication::primaryScreen()->geometry();
 
     if (pix.width() < screenGeometry.width())
         x = (screenGeometry.width() - pix.width()) / 2;
@@ -62,16 +39,14 @@ Imge::Imge(const QString& filePath, QWidget* parent) : QMainWindow{parent}, imag
         pix = pix.scaledToHeight(screenGeometry.height() / 2);
     }
 
-    ui->label->setGeometry(x, y, pix.width(), pix.height());
+    ui->label->setGeometry(QRect{x, y, pix.width(), pix.height()});
     ui->label->setPixmap(pix);
     ui->label->raise();
 
-    /*
-     * set full screen
-     */
-    QGuiApplication::setApplicationDisplayName(image.getFileName().toStdString().c_str());
-    setWindowFlags(Qt::FramelessWindowHint);
+    setWindowFlag(Qt::FramelessWindowHint, true);
     setWindowState(Qt::WindowMaximized);
+
+    QGuiApplication::setApplicationDisplayName(image.getFileName().toStdString().c_str());
 }
 
 Imge::~Imge()
@@ -79,3 +54,68 @@ Imge::~Imge()
     delete ui;
 }
 
+void Imge::takeAScreenShot()
+{
+    QScreen* screen = QGuiApplication::primaryScreen();
+
+    if (const QWindow* window = windowHandle())
+        screen = window->screen();
+
+    if (!screen)
+        return; //throw "";
+
+    background = screen->grabWindow(0);
+}
+
+void Imge::mouseDoubleClickEvent(QMouseEvent *event)
+{
+    if ((event->button() != Qt::LeftButton) || (windowState() & Qt::WindowMaximized))
+        return;
+
+    grabMouse();
+
+    hide();
+
+    setWindowFlag(Qt::FramelessWindowHint, true);
+    setWindowState(Qt::WindowMaximized);
+
+    takeAScreenShot();
+    update();
+
+    show();
+}
+
+void Imge::mousePressEvent(QMouseEvent* event)
+{
+    if (!((event->button() == Qt::RightButton) || (event->button() == Qt::LeftButton)) || !(windowState() & Qt::WindowMaximized))
+        return;
+
+    grabMouse();
+
+    hide();
+
+    setWindowFlag(Qt::FramelessWindowHint, false);
+    setWindowState(Qt::WindowNoState);
+
+    /*
+        sg = QDesktopWidget().availableGeometry()
+        fg = window_object.frameGeometry
+        wg = window_object.geometry
+    */
+
+    move(ui->label->x(), ui->label->y());
+    resize(ui->label->width(), ui->label->height());
+    background.fill(Qt::white);
+    update();
+
+    show();
+}
+
+void Imge::paintEvent(QPaintEvent* event)
+{
+    QMainWindow::paintEvent(event);
+    QPainter painter(this);
+
+    painter.drawPixmap(background.rect(), background);
+    painter.fillRect(background.rect(), QBrush(QColor(0, 0, 0, 127)));
+}

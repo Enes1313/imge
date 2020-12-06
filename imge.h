@@ -2,7 +2,9 @@
 #define IMGE_H
 
 #include <QMainWindow>
-#include <image.h>
+#include <QPainter>
+#include <QPaintEvent>
+#include "image.h"
 
 QT_BEGIN_NAMESPACE
 namespace Ui { class Imge; }
@@ -19,6 +21,10 @@ public:
 private:
     Image image;
     Ui::Imge* ui;
-    QPalette palette;
+    QPixmap background;
+    void takeAScreenShot();
+    void mouseDoubleClickEvent(QMouseEvent *event);
+    void mousePressEvent(QMouseEvent *event);
+    void paintEvent(QPaintEvent * event);
 };
 #endif // IMGE_H

@@ -5,6 +5,7 @@
 #include <QMouseEvent>
 #include <QPainter>
 #include <QGuiApplication>
+#include <QThread>
 
 //TODO: Fare tekerleği ile labelin pozisyonunun değişmesi.
 //TODO: Büyük pecnereye tekrar gelindiğinde yeni arkaplandaki yeni ekran görüntüsü alınmasında sorun var.
@@ -12,7 +13,7 @@
 Imge::Imge(const QString& filePath) : image{filePath}, label{this}
 {
     /*
-     * Bşangıçta ekran görüntüsü alınır.
+     * Başlangıçta ekran görüntüsü alınır.
      */
     takeAScreenShot();
 
@@ -49,8 +50,7 @@ Imge::Imge(const QString& filePath) : image{filePath}, label{this}
     setWindowFlag(Qt::FramelessWindowHint, true);
     setWindowState(Qt::WindowMaximized);
 
-    //QGuiApplication::setApplicationDisplayName(image.getFileName().toStdString().c_str());
-    setWindowTitle(QCoreApplication::translate("Imge", "Imge", nullptr));
+    setWindowTitle("Imge - " + image.getFileName());
 }
 
 void Imge::takeAScreenShot()
@@ -61,9 +61,9 @@ void Imge::takeAScreenShot()
         screen = window->screen();
 
     if (!screen)
-        return; //throw "";
-
-    background = screen->grabWindow(0);
+        background.fill(Qt::red);
+    else
+        background = screen->grabWindow(0);
 }
 
 void Imge::mouseDoubleClickEvent(QMouseEvent *event)
@@ -73,15 +73,24 @@ void Imge::mouseDoubleClickEvent(QMouseEvent *event)
 
     grabMouse();
 
-    hide();
+    setVisible(false);
 
-    setWindowFlag(Qt::FramelessWindowHint, true);
-    setWindowState(Qt::WindowMaximized);
+    label.move(x(),y());
+
+    // Buradaki problem, X11 de setVisible işleminden sonra X11 pencereyi hemen görünmez
+    // kılmaması. Windowsta sanırım sorun yokmuş. Bununla ilgili iki link aşağıda.
+    // https://stackoverflow.com/questions/28977748/qt-screenshot-example-without-timer
+    // https://www.qtcentre.org/threads/20985-Ensuring-a-Widget-Is-Hidden
+    // Bu probleme çözümüm msleep kullanılması lakin hiç güzel bir çözüm değil.
+    QThread::msleep(100);
 
     takeAScreenShot();
     update();
 
-    show();
+    setWindowFlag(Qt::FramelessWindowHint, true);
+    setWindowState(Qt::WindowMaximized);
+
+    setVisible(true);
 }
 
 void Imge::mousePressEvent(QMouseEvent* event)
@@ -91,28 +100,34 @@ void Imge::mousePressEvent(QMouseEvent* event)
 
     grabMouse();
 
-    hide();
+    setVisible(false);
+
+    /*
+     * Linuxta pencere küçüldükten sonra, fareyle pencereyi taşıyın.
+     * Resim sağdan monitorunuzun bir yerinden taşsın.
+     * Çift tıklayıp window'u maximize edin. Resim hala taşmış bir şekilde duruyor olacaktır.
+     * Şimdi ise tek tıklayın. Eğer küçülmüş pencere monitorunuzdan taşmamış ise taşması laızm.
+     * Linuxta denedim taşmıyor. Lakin windowsta taşacak yüksek ihtimal.
+     *
+     * Resim çok küçültülse bile pencere boyutu fazla küçülmemeli. bir sınır koyulmalı.
+     * Resim çok büyütülse bile pencere boyutu fazla büyük olmamalı. bir sınır koyulmalı.
+     * Bu sınır belki kurucu fonksiyonda ayarlanabilir. Belki burada if ile kontrol edilebilir.
+     */
 
     setWindowFlag(Qt::FramelessWindowHint, false);
     setWindowState(Qt::WindowNoState);
 
-    /*
-        sg = QDesktopWidget().availableGeometry()
-        fg = window_object.frameGeometry
-        wg = window_object.geometry
-    */
-
     move(label.x(), label.y());
     resize(label.width(), label.height());
+    label.move(0,0);
     background.fill(Qt::white);
     update();
 
-    show();
+    setVisible(true);
 }
 
-void Imge::paintEvent(QPaintEvent* event)
+void Imge::paintEvent(QPaintEvent*)
 {
-    QWidget::paintEvent(event);
     QPainter painter(this);
 
     painter.drawPixmap(background.rect(), background);

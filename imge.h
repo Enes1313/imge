@@ -46,7 +46,7 @@ private:
     void takeAScreenShot();
     void mouseDoubleClickEvent(QMouseEvent *event) override;
     void mousePressEvent(QMouseEvent *event) override;
-    void paintEvent(QPaintEvent * event) override;
+    void paintEvent(QPaintEvent *) override;
 };
 
 #endif // IMGE_H

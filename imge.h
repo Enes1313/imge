@@ -47,6 +47,7 @@ private:
     void mouseDoubleClickEvent(QMouseEvent *event) override;
     void mousePressEvent(QMouseEvent *event) override;
     void paintEvent(QPaintEvent *) override;
+    void wheelEvent(QWheelEvent *event) override;
 };
 
 #endif // IMGE_H

@@ -14,35 +14,45 @@ Imge::Imge(const QString& filePath) : image{filePath}, label{this}
 {
     /*
      * Başlangıçta ekran görüntüsü alınır.
+     * Ekran görüntüsü değilde opaklık yapılsaydı : stabil bir kod görmedim.
+     * https://forum.qt.io/topic/1090/solved-how-to-get-an-simple-transparent-window
+     * https://www.youtube.com/watch?v=AIkyCKpag7s
      */
+
     takeAScreenShot();
 
     /*
      * Çeşitli hesaplama sonrası label merkeze set edilir.
      */
-    int x, y;
+    QRect r;
     QPixmap pix{QPixmap::fromImage(image.getImage())};
     QRect screenGeometry = QGuiApplication::primaryScreen()->geometry();
 
     if (pix.width() < screenGeometry.width())
-        x = (screenGeometry.width() - pix.width()) / 2;
+    {
+        r.setX((screenGeometry.width() - pix.width()) / 2);
+        r.setWidth(pix.width());
+    }
     else
     {
-        x = screenGeometry.width() / 4;
-        pix = pix.scaledToWidth(screenGeometry.width() / 2);
+        r.setX(screenGeometry.width() / 4);
+        r.setWidth(screenGeometry.width() / 2);
     }
 
     if (pix.height() < screenGeometry.height())
-        y = (screenGeometry.height() - pix.height()) / 2;
+    {
+        r.setY((screenGeometry.height() - pix.height()) / 2);
+        r.setHeight(pix.height());
+    }
     else
     {
-        y = screenGeometry.height() / 4;
-        pix = pix.scaledToHeight(screenGeometry.height() / 2);
+        r.setY(screenGeometry.height() / 4);
+        r.setHeight(screenGeometry.height() / 2);
     }
 
-    label.setGeometry(QRect{x, y, pix.width(), pix.height()});
+    label.setScaledContents(true);
+    label.setGeometry(r);
     label.setPixmap(pix);
-    label.raise();
 
     /*
      * Tam full ekran olması istenmiyor ama bu ayar güzel.
@@ -132,4 +142,30 @@ void Imge::paintEvent(QPaintEvent*)
 
     painter.drawPixmap(background.rect(), background);
     painter.fillRect(background.rect(), QBrush(QColor(0, 0, 0, 127)));
+}
+
+/* TODO:
+ * Eğer fare resim üzerinde değilse merkeze göre büyültüp küçülecek
+ * Küçültme ve büyülten ifadedeki hesaplamalar değişmeli optimal bir algoritma olmalı.
+ * Şuan küçültme ve büyültme yaparken sapmalar meydana geliyor. Bu sapmalar düzeltilmeli.
+ * Ekran küçükken çalışmıyor. globalX ve globalY sebebiyle diye düşünüyorum.
+ */
+void Imge::wheelEvent(QWheelEvent *event)
+{
+    int mX = event->globalX(), mY = event->globalY();
+    int w1 = label.width(), h1 = label.height(), w2, h2;
+
+    if (event->delta() < 0)
+    {
+        w2 = label.width() - 50;
+        h2 = w2 * (1.0 * label.height()) / label.width();
+    }
+    else
+    {
+        w2 = label.width() + 100;
+        h2 = w2 * (1.0 * label.height()) / label.width();
+    }
+
+    label.resize(w2, h2);
+    label.move(mX - w2 * (mX - label.x()) / (1.0 * w1), mY - h2 * (mY - label.y()) / (1.0 * h1));
 }

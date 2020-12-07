@@ -5,6 +5,10 @@
 #include <QString>
 #include <QImage>
 
+/*
+ * Bu sınıf kullanıcının görüntülemek istediği resim dosyasını tutan sınıftır. İler izamanda bu sınıf
+ * QLabel sınıfından türetilmiş bir widget olarak tasarlanabilir.
+ */
 class Image : public QObject
 {
     Q_OBJECT

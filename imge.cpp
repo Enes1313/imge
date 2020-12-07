@@ -1,24 +1,24 @@
 #include "imge.h"
-#include "ui_imge.h"
 #include <QWindow>
 #include <QScreen>
-#include <QBitmap>
 #include <QDebug>
-#include <QDesktopWidget>
 #include <QMouseEvent>
+#include <QPainter>
+#include <QGuiApplication>
 
 //TODO: Fare tekerleği ile labelin pozisyonunun değişmesi.
-//TODO: Pencere full iken Fare bir kez tıklandığında, pencerenin küçüklmesi.
-//TODO: Pencere küçük iken fare ile iki kez tıklandığında pencerenin full olması.
-//TODO: Küçük pencerede arkaplan rengi gri olacak.
-//TODO: Büyük pecnereye tekrar gelindiğinde yeni arkaplandaki yeni ekran görüntüsü alınması.
+//TODO: Büyük pecnereye tekrar gelindiğinde yeni arkaplandaki yeni ekran görüntüsü alınmasında sorun var.
 
-Imge::Imge(const QString& filePath, QWidget* parent) : QMainWindow{parent}, image{filePath}, ui{new Ui::Imge}
+Imge::Imge(const QString& filePath) : image{filePath}, label{this}
 {
-    ui->setupUi(this);
-
+    /*
+     * Bşangıçta ekran görüntüsü alınır.
+     */
     takeAScreenShot();
 
+    /*
+     * Çeşitli hesaplama sonrası label merkeze set edilir.
+     */
     int x, y;
     QPixmap pix{QPixmap::fromImage(image.getImage())};
     QRect screenGeometry = QGuiApplication::primaryScreen()->geometry();
@@ -39,19 +39,18 @@ Imge::Imge(const QString& filePath, QWidget* parent) : QMainWindow{parent}, imag
         pix = pix.scaledToHeight(screenGeometry.height() / 2);
     }
 
-    ui->label->setGeometry(QRect{x, y, pix.width(), pix.height()});
-    ui->label->setPixmap(pix);
-    ui->label->raise();
+    label.setGeometry(QRect{x, y, pix.width(), pix.height()});
+    label.setPixmap(pix);
+    label.raise();
 
+    /*
+     * Tam full ekran olması istenmiyor ama bu ayar güzel.
+     */
     setWindowFlag(Qt::FramelessWindowHint, true);
     setWindowState(Qt::WindowMaximized);
 
-    QGuiApplication::setApplicationDisplayName(image.getFileName().toStdString().c_str());
-}
-
-Imge::~Imge()
-{
-    delete ui;
+    //QGuiApplication::setApplicationDisplayName(image.getFileName().toStdString().c_str());
+    setWindowTitle(QCoreApplication::translate("Imge", "Imge", nullptr));
 }
 
 void Imge::takeAScreenShot()
@@ -103,8 +102,8 @@ void Imge::mousePressEvent(QMouseEvent* event)
         wg = window_object.geometry
     */
 
-    move(ui->label->x(), ui->label->y());
-    resize(ui->label->width(), ui->label->height());
+    move(label.x(), label.y());
+    resize(label.width(), label.height());
     background.fill(Qt::white);
     update();
 
@@ -113,7 +112,7 @@ void Imge::mousePressEvent(QMouseEvent* event)
 
 void Imge::paintEvent(QPaintEvent* event)
 {
-    QMainWindow::paintEvent(event);
+    QWidget::paintEvent(event);
     QPainter painter(this);
 
     painter.drawPixmap(background.rect(), background);

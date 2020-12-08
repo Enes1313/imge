@@ -42,6 +42,9 @@ private:
     Image image;
     QLabel label;
     QPixmap background;
+    int imgFirstAreaW, imgFirstAreaH;
+    int zoom{};
+    double zoomFactor{};
 
     void takeAScreenShot();
     void mouseDoubleClickEvent(QMouseEvent *event) override;

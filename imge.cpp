@@ -6,9 +6,7 @@
 #include <QPainter>
 #include <QGuiApplication>
 #include <QThread>
-
-//TODO: Fare tekerleği ile labelin pozisyonunun değişmesi.
-//TODO: Büyük pecnereye tekrar gelindiğinde yeni arkaplandaki yeni ekran görüntüsü alınmasında sorun var.
+#include <QtCore>
 
 Imge::Imge(const QString& filePath) : image{filePath}, label{this}
 {
@@ -24,34 +22,34 @@ Imge::Imge(const QString& filePath) : image{filePath}, label{this}
     /*
      * Çeşitli hesaplama sonrası label merkeze set edilir.
      */
-    QRect r;
+    int imgx, imgy;
     QPixmap pix{QPixmap::fromImage(image.getImage())};
     QRect screenGeometry = QGuiApplication::primaryScreen()->geometry();
 
     if (pix.width() < screenGeometry.width())
     {
-        r.setX((screenGeometry.width() - pix.width()) / 2);
-        r.setWidth(pix.width());
+        imgx = (screenGeometry.width() - pix.width()) / 2;
+        imgFirstAreaW = pix.width();
     }
     else
     {
-        r.setX(screenGeometry.width() / 4);
-        r.setWidth(screenGeometry.width() / 2);
+        imgx = screenGeometry.width() / 4;
+        imgFirstAreaW = screenGeometry.width() / 2;
     }
 
     if (pix.height() < screenGeometry.height())
     {
-        r.setY((screenGeometry.height() - pix.height()) / 2);
-        r.setHeight(pix.height());
+        imgy = (screenGeometry.height() - pix.height()) / 2;
+        imgFirstAreaH = pix.height();
     }
     else
     {
-        r.setY(screenGeometry.height() / 4);
-        r.setHeight(screenGeometry.height() / 2);
+        imgy = screenGeometry.height() / 4;
+        imgFirstAreaH = screenGeometry.height() / 2;
     }
 
     label.setScaledContents(true);
-    label.setGeometry(r);
+    label.setGeometry(imgx, imgy, imgFirstAreaW, imgFirstAreaH);
     label.setPixmap(pix);
 
     /*
@@ -145,27 +143,51 @@ void Imge::paintEvent(QPaintEvent*)
 }
 
 /* TODO:
- * Eğer fare resim üzerinde değilse merkeze göre büyültüp küçülecek
  * Küçültme ve büyülten ifadedeki hesaplamalar değişmeli optimal bir algoritma olmalı.
- * Şuan küçültme ve büyültme yaparken sapmalar meydana geliyor. Bu sapmalar düzeltilmeli.
- * Ekran küçükken çalışmıyor. globalX ve globalY sebebiyle diye düşünüyorum.
  */
 void Imge::wheelEvent(QWheelEvent *event)
 {
-    int mX = event->globalX(), mY = event->globalY();
-    int w1 = label.width(), h1 = label.height(), w2, h2;
+    static int w1{}, w2{}, h1{}, h2{};
+    static int mX{}, mY{}, lX{}, lY{};
+    static int mouseX{-1}, mouseY{-1};
+
+    if (mouseX != event->x() || mouseY != event->y())
+    {
+        mouseX = event->x();
+        mouseY = event->y();
+
+        if (label.geometry().contains(event->pos()))
+        {
+            mX = event->pos().x();
+            mY = event->pos().y();
+        }
+        else if (label.geometry().contains(width() / 2, height() / 2))
+        {
+            mX = width() / 2;
+            mY = height() / 2;
+        }
+        else
+        {
+            mX = label.x() + label.width() / 2;
+            mY = label.y() + label.height() / 2;
+        }
+
+        lX = label.x();
+        lY = label.y();
+        w1 = label.width();
+        h1 = label.height();
+    }
+
 
     if (event->delta() < 0)
     {
-        w2 = label.width() - 50;
-        h2 = w2 * (1.0 * label.height()) / label.width();
+        zoomFactor = qPow(0.87, ++zoom);
     }
     else
     {
-        w2 = label.width() + 100;
-        h2 = w2 * (1.0 * label.height()) / label.width();
+        zoomFactor = qPow(0.87, --zoom);
     }
 
-    label.resize(w2, h2);
-    label.move(mX - w2 * (mX - label.x()) / (1.0 * w1), mY - h2 * (mY - label.y()) / (1.0 * h1));
+    label.resize(w2 = (imgFirstAreaW * zoomFactor - 1), h2 = (imgFirstAreaH * zoomFactor - 1));
+    label.move(mX - qRound(static_cast<double>(w2 * (mX - lX)) / w1), mY - qRound(static_cast<double>(h2 * (mY - lY)) / h1));
 }

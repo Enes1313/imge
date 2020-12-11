@@ -46,12 +46,15 @@ private:
     int zoom{};
     double zoomFactor{};
 
-    void takeAScreenShot();
-    void mouseDoubleClickEvent(QMouseEvent *event) override;
-    void mousePressEvent(QMouseEvent *event) override;
-    void paintEvent(QPaintEvent *) override;
-    void wheelEvent(QWheelEvent *event) override;
-    void changeEvent( QEvent* e ) override;
+    void mouseDoubleClickEvent(QMouseEvent*) override;
+    void mousePressEvent(QMouseEvent*) override;
+    void paintEvent(QPaintEvent*) override;
+    void wheelEvent(QWheelEvent*) override;
+    void changeEvent(QEvent*) override;
+    bool nativeEvent(const QByteArray &, void *, long *) override;
+    void takeAScreenShot(void);
+    void expendWindow(void);
+    void restoreWindow(void);
 };
 
 #endif // IMGE_H

@@ -8,10 +8,16 @@
 #include <QThread>
 #include <QtCore>
 
+#ifdef __linux__
+#include <xcb/xcb.h>
+#elif _WIN32
+#include <windows.h>
+#endif
+
 Imge::Imge(const QString& filePath) : image{filePath}, label{this}
 {
     /*
-     * Çeşitli hesaplama sonrası label merkeze set edilir.
+     * Çeşitli hesaplama sonrası label merkeze konumlandırılır.
      */
     int imgx, imgy;
     QPixmap pix{QPixmap::fromImage(image.getImage())};
@@ -43,26 +49,9 @@ Imge::Imge(const QString& filePath) : image{filePath}, label{this}
     label.setGeometry(imgx, imgy, imgFirstAreaW, imgFirstAreaH);
     label.setPixmap(pix);
 
-    /*
-     * Tam full ekran olması istenmiyor ama bu ayar güzel.
-     */
-    setWindowFlag(Qt::FramelessWindowHint, true);
-    setWindowState(Qt::WindowMaximized);
-
-    setWindowTitle("Imge - " + image.getFileName());
-}
-
-void Imge::takeAScreenShot()
-{
-    QScreen* screen = QGuiApplication::primaryScreen();
-
-    if (const QWindow* window = windowHandle())
-        screen = window->screen();
-
-    if (!screen)
-        background.fill(Qt::red);
-    else
-        background = screen->grabWindow(0);
+    setWindowFlag(Qt::FramelessWindowHint, true);       // Title bar kısmı ekran büyükken olmayacak.
+    setWindowTitle("Imge - " + image.getFileName());    // Imge - fileName
+    expendWindow();
 }
 
 void Imge::mouseDoubleClickEvent(QMouseEvent *event)
@@ -73,7 +62,8 @@ void Imge::mouseDoubleClickEvent(QMouseEvent *event)
     if (event->button() == Qt::LeftButton)
     {
         grabMouse();
-        setWindowState(Qt::WindowMaximized);
+        showMaximized();
+        //expendWindow();
     }
 }
 
@@ -86,6 +76,7 @@ void Imge::mousePressEvent(QMouseEvent* event)
     {
         grabMouse();
         setWindowState(Qt::WindowNoState);
+        //restoreWindow();
     }
 }
 
@@ -146,11 +137,9 @@ void Imge::wheelEvent(QWheelEvent *event)
     label.resize(w2 = (imgFirstAreaW * zoomFactor - 1), h2 = (imgFirstAreaH * zoomFactor - 1));
     label.move(mX - qRound(static_cast<double>(w2 * (mX - lX)) / w1), mY - qRound(static_cast<double>(h2 * (mY - lY)) / h1));
 }
-
-/*
- * TODO: Pencere büyümeden bu event'i yakalamk gerek, buradaki kod büyürken çalışıyor.
- */
-void Imge::changeEvent(QEvent* e )
+// TODO: bug, ekran maximize olurken işletim sistemi ilk önce maximize ediyor sonra burası çalışıyor.
+// önce burası çalışmalı idi. Bu sebeple nativeEvent kısmı ile bug giderilmeli.
+void Imge::changeEvent(QEvent * e)
 {
     if(e->type() == QEvent::WindowStateChange)
     {
@@ -158,55 +147,105 @@ void Imge::changeEvent(QEvent* e )
 
         if (event->oldState() != Qt::WindowNoState && this->windowState() == Qt::WindowNoState)
         {
-            setVisible(false);
-            /*
-             * Linuxta pencere küçüldükten sonra, fareyle pencereyi taşıyın.
-             * Resim sağdan monitorunuzun bir yerinden taşsın.
-             * Çift tıklayıp window'u maximize edin. Resim hala taşmış bir şekilde duruyor olacaktır.
-             * Şimdi ise tek tıklayın. Eğer küçülmüş pencere monitorunuzdan taşmamış ise taşması laızm.
-             * Linuxta denedim taşmıyor. Lakin windowsta taşacak yüksek ihtimal.
-             *
-             * Resim çok küçültülse bile pencere boyutu fazla küçülmemeli. bir sınır koyulmalı.
-             * Resim çok büyütülse bile pencere boyutu fazla büyük olmamalı. bir sınır koyulmalı.
-             * Bu sınır belki kurucu fonksiyonda ayarlanabilir. Belki burada if ile kontrol edilebilir.
-             */
-
-            move(label.x(), label.y());
-            resize(label.width(), label.height());
-            label.move(0,0);
-            background.fill(Qt::white);
-            setWindowFlag(Qt::FramelessWindowHint, false);
-            /*
-             * changeEvent'e taşınan kod sonrası pencere küçültmede bir sorun var.
-             * Çözüm profesyonel değil şimdilik sleep çağrılıyor.
-             */
-            QThread::msleep(100);
-            update();
-
-            setVisible(true);
+            restoreWindow();
         }
         else if (event->oldState() != Qt::WindowMaximized && this->windowState() == Qt::WindowMaximized)
         {
-            setVisible(false);
-
-            // Buradaki problem, X11 de setVisible işleminden sonra X11 pencereyi hemen görünmez
-            // kılmaması. Windowsta sanırım sorun yokmuş. Bununla ilgili iki link aşağıda.
-            // https://stackoverflow.com/questions/28977748/qt-screenshot-example-without-timer
-            // https://www.qtcentre.org/threads/20985-Ensuring-a-Widget-Is-Hidden
-            // Bu probleme çözümüm msleep kullanılması lakin hiç güzel bir çözüm değil.
-            QThread::msleep(100);
-            /*
-             * Ekran maksimum olmadan ekran görüntüsü alınır.
-             * Ekran görüntüsü değilde opaklık yapılsaydı : stabil bir kod görmedim.
-             * https://forum.qt.io/topic/1090/solved-how-to-get-an-simple-transparent-window
-             * https://www.youtube.com/watch?v=AIkyCKpag7s
-             */
-            takeAScreenShot();
-            label.move(x() + label.x(), y() + label.y());
-            setWindowFlag(Qt::FramelessWindowHint, true);
-            update();
-
-            setVisible(true);
+            expendWindow();
         }
     }
+}
+
+// https://forum.qt.io/topic/104184/is-it-possible-to-intercept-maximizing-the-main-window
+// https://forum.qt.io/topic/104533/how-to-ignore-the-event-when-i-click-on-the-button-to-maximize-the-window-windowmaximizebuttonhint/11
+bool Imge::nativeEvent(const QByteArray &eventType, void *message, long *result)
+{
+#ifdef __linux__
+    if (eventType == "xcb_generic_event_t")
+    {
+        xcb_generic_event_t* ev = static_cast<xcb_generic_event_t *>(message);
+
+        if (XCB_EXPOSE == ev->response_type)
+        {
+            xcb_expose_event_t* pev = reinterpret_cast<xcb_expose_event_t*>(ev);
+        }
+    }
+#elif _WIN32
+    if (eventType == "windows_generic_MSG")
+    {
+        MSG *msg = static_cast<MSG *>(message);
+        if (msg->message == WM_SYSCOMMAND)
+        {
+            if (msg->wParam == SC_MAXIMIZE)
+            {
+                //
+            }
+        }
+    }
+#endif
+    return QWidget::nativeEvent(eventType, message, result);
+}
+
+void Imge::takeAScreenShot()
+{
+    QScreen* screen = QGuiApplication::primaryScreen();
+
+    if (const QWindow* window = windowHandle())
+        screen = window->screen();
+
+    if (!screen)
+        background.fill(Qt::red);
+    else
+        background = screen->grabWindow(0);
+}
+
+void Imge::expendWindow()
+{
+    setVisible(false);
+
+    // Buradaki problem, X11 de setVisible işleminden sonra X11 pencereyi hemen görünmez
+    // kılmaması. Windowsta sanırım sorun yokmuş. Bununla ilgili iki link aşağıda.
+    // https://stackoverflow.com/questions/28977748/qt-screenshot-example-without-timer
+    // https://www.qtcentre.org/threads/20985-Ensuring-a-Widget-Is-Hidden
+    // Bu probleme çözümüm msleep kullanılması lakin hiç güzel bir çözüm değil.
+    QThread::msleep(100);
+    /*
+     * Ekran maksimum olmadan ekran görüntüsü alınır.
+     * Ekran görüntüsü değilde opaklık yapılsaydı : stabil bir kod görmedim.
+     * https://forum.qt.io/topic/1090/solved-how-to-get-an-simple-transparent-window
+     * https://www.youtube.com/watch?v=AIkyCKpag7s
+     */
+    takeAScreenShot();
+    label.move(x() + label.x(), y() + label.y());
+
+    setWindowState(Qt::WindowMaximized);
+    setWindowFlag(Qt::FramelessWindowHint, true);
+
+    update();
+    setVisible(true);
+}
+
+void Imge::restoreWindow()
+{
+    setVisible(false);
+    /*
+     * Linuxta pencere küçüldükten sonra, fareyle pencereyi taşıyın.
+     * Resim sağdan monitorunuzun bir yerinden taşsın.
+     * Çift tıklayıp window'u maximize edin. Resim hala taşmış bir şekilde duruyor olacaktır.
+     * Şimdi ise tek tıklayın. Eğer küçülmüş pencere monitorunuzdan taşmamış ise taşması laızm.
+     * Linuxta denedim taşmıyor. Lakin windowsta taşacak yüksek ihtimal.
+     *
+     * Resim çok küçültülse bile pencere boyutu fazla küçülmemeli. bir sınır koyulmalı.
+     * Resim çok büyütülse bile pencere boyutu fazla büyük olmamalı. bir sınır koyulmalı.
+     * Bu sınır belki kurucu fonksiyonda ayarlanabilir. Belki burada if ile kontrol edilebilir.
+     */
+    move(label.x(), label.y());
+    label.move(0,0);
+    resize(label.width(), label.height());
+    background.fill(Qt::white);
+    setWindowFlag(Qt::FramelessWindowHint, false);
+
+    QThread::msleep(100);
+    update();
+    setVisible(true);
 }

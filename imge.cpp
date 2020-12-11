@@ -98,7 +98,8 @@ void Imge::paintEvent(QPaintEvent*)
 }
 
 /* TODO:
- * Küçültme ve büyülten ifadedeki hesaplamalar değişmeli optimal bir algoritma olmalı.
+ * Büyülten ifadedeki hesaplamalar değişebilir. (image % 100 den fazla büyütülünce değişsin.)
+ * Büyültmede ve küçültmede sınırlar getirilmeli.
  */
 void Imge::wheelEvent(QWheelEvent *event)
 {
@@ -133,7 +134,6 @@ void Imge::wheelEvent(QWheelEvent *event)
         h1 = label.height();
     }
 
-
     if (event->delta() < 0)
     {
         zoomFactor = qPow(0.87, ++zoom);
@@ -152,7 +152,7 @@ void Imge::wheelEvent(QWheelEvent *event)
  */
 void Imge::changeEvent(QEvent* e )
 {
-    if( e->type() == QEvent::WindowStateChange )
+    if(e->type() == QEvent::WindowStateChange)
     {
         QWindowStateChangeEvent* event = static_cast<QWindowStateChangeEvent* >( e );
 
@@ -176,7 +176,11 @@ void Imge::changeEvent(QEvent* e )
             label.move(0,0);
             background.fill(Qt::white);
             setWindowFlag(Qt::FramelessWindowHint, false);
-
+            /*
+             * changeEvent'e taşınan kod sonrası pencere küçültmede bir sorun var.
+             * Çözüm profesyonel değil şimdilik sleep çağrılıyor.
+             */
+            QThread::msleep(100);
             update();
 
             setVisible(true);

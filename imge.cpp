@@ -5,9 +5,10 @@
 #include <QMouseEvent>
 #include <QPainter>
 #include <QGuiApplication>
+#include <QApplication>
 #include <QThread>
 #include <QtCore>
-
+#include <QStyle>
 #ifdef __linux__
 #include <xcb/xcb.h>
 #elif _WIN32
@@ -46,12 +47,14 @@ Imge::Imge(const QString& filePath) : image{filePath}, label{this}
     }
 
     label.setScaledContents(true);
-    label.setGeometry(imgx, imgy, imgFirstAreaW, imgFirstAreaH);
+    label.setGeometry(0, 0, imgFirstAreaW, imgFirstAreaH);
     label.setPixmap(pix);
+    setGeometry(imgx, imgy, imgFirstAreaW, imgFirstAreaH);
 
     setWindowFlag(Qt::FramelessWindowHint, true);       // Title bar kısmı ekran büyükken olmayacak.
     setWindowTitle("Imge - " + image.getFileName());    // Imge - fileName
     expendWindow();
+    showMaximized();
 }
 
 void Imge::mouseDoubleClickEvent(QMouseEvent *event)
@@ -62,8 +65,8 @@ void Imge::mouseDoubleClickEvent(QMouseEvent *event)
     if (event->button() == Qt::LeftButton)
     {
         grabMouse();
+        expendWindow();
         showMaximized();
-        //expendWindow();
     }
 }
 
@@ -76,7 +79,7 @@ void Imge::mousePressEvent(QMouseEvent* event)
     {
         grabMouse();
         setWindowState(Qt::WindowNoState);
-        //restoreWindow();
+        restoreWindow();
     }
 }
 
@@ -94,38 +97,35 @@ void Imge::paintEvent(QPaintEvent*)
  */
 void Imge::wheelEvent(QWheelEvent *event)
 {
-    static int w1{}, w2{}, h1{}, h2{};
-    static int mX{}, mY{}, lX{}, lY{};
-    static int mouseX{-1}, mouseY{-1};
+    static int w1{}, h1{};
+    static QPoint offset, pointOfZoom{}, labelCoord{}, mouseCoord{-1, -1};
 
-    if (mouseX != event->x() || mouseY != event->y())
+    if (mouseCoord != event->position().toPoint())
     {
-        mouseX = event->x();
-        mouseY = event->y();
+        mouseCoord = event->position().toPoint();
 
-        if (label.geometry().contains(event->pos()))
+        if (label.geometry().contains(mouseCoord))
         {
-            mX = event->pos().x();
-            mY = event->pos().y();
+            pointOfZoom = mouseCoord;
         }
         else if (label.geometry().contains(width() / 2, height() / 2))
         {
-            mX = width() / 2;
-            mY = height() / 2;
+            pointOfZoom.setX(width() / 2);
+            pointOfZoom.setY(height() / 2);
         }
         else
         {
-            mX = label.x() + label.width() / 2;
-            mY = label.y() + label.height() / 2;
+            pointOfZoom.setX(label.x() + label.width() / 2);
+            pointOfZoom.setY(label.y() + label.height() / 2);
         }
 
-        lX = label.x();
-        lY = label.y();
         w1 = label.width();
         h1 = label.height();
+        labelCoord.setX(label.x());
+        labelCoord.setY(label.y());
     }
 
-    if (event->delta() < 0)
+    if (event->angleDelta().y() < 0)
     {
         zoomFactor = qPow(0.87, ++zoom);
     }
@@ -134,13 +134,20 @@ void Imge::wheelEvent(QWheelEvent *event)
         zoomFactor = qPow(0.87, --zoom);
     }
 
-    label.resize(w2 = (imgFirstAreaW * zoomFactor - 1), h2 = (imgFirstAreaH * zoomFactor - 1));
-    label.move(mX - qRound(static_cast<double>(w2 * (mX - lX)) / w1), mY - qRound(static_cast<double>(h2 * (mY - lY)) / h1));
+    label.resize(imgFirstAreaW * zoomFactor - 1, imgFirstAreaH * zoomFactor - 1);
+
+    offset = pointOfZoom - labelCoord;
+    offset.setX(qRound(static_cast<double>(label.width() * offset.x()) / w1));
+    offset.setY(qRound(static_cast<double>(label.height() * offset.y()) / h1));
+
+    label.move(pointOfZoom - offset);
 }
+
 // TODO: bug, ekran maximize olurken işletim sistemi ilk önce maximize ediyor sonra burası çalışıyor.
 // önce burası çalışmalı idi. Bu sebeple nativeEvent kısmı ile bug giderilmeli.
 void Imge::changeEvent(QEvent * e)
 {
+#ifdef __linux__
     if(e->type() == QEvent::WindowStateChange)
     {
         QWindowStateChangeEvent* event = static_cast<QWindowStateChangeEvent* >( e );
@@ -154,6 +161,8 @@ void Imge::changeEvent(QEvent * e)
             expendWindow();
         }
     }
+#endif
+    QWidget::changeEvent(e);
 }
 
 // https://forum.qt.io/topic/104184/is-it-possible-to-intercept-maximizing-the-main-window
@@ -174,11 +183,16 @@ bool Imge::nativeEvent(const QByteArray &eventType, void *message, long *result)
     if (eventType == "windows_generic_MSG")
     {
         MSG *msg = static_cast<MSG *>(message);
+
         if (msg->message == WM_SYSCOMMAND)
         {
-            if (msg->wParam == SC_MAXIMIZE)
+            if (msg->wParam == SC_MAXIMIZE || msg->wParam == (SC_MAXIMIZE + 2))
             {
-                //
+                expendWindow();
+            }
+            else if (msg->wParam == SC_RESTORE || msg->wParam == (SC_RESTORE + 2))
+            {
+                restoreWindow();
             }
         }
     }
@@ -208,7 +222,7 @@ void Imge::expendWindow()
     // https://stackoverflow.com/questions/28977748/qt-screenshot-example-without-timer
     // https://www.qtcentre.org/threads/20985-Ensuring-a-Widget-Is-Hidden
     // Bu probleme çözümüm msleep kullanılması lakin hiç güzel bir çözüm değil.
-    QThread::msleep(100);
+    QThread::msleep(200);
     /*
      * Ekran maksimum olmadan ekran görüntüsü alınır.
      * Ekran görüntüsü değilde opaklık yapılsaydı : stabil bir kod görmedim.
@@ -218,7 +232,6 @@ void Imge::expendWindow()
     takeAScreenShot();
     label.move(x() + label.x(), y() + label.y());
 
-    setWindowState(Qt::WindowMaximized);
     setWindowFlag(Qt::FramelessWindowHint, true);
 
     update();
@@ -228,22 +241,25 @@ void Imge::expendWindow()
 void Imge::restoreWindow()
 {
     setVisible(false);
+    setWindowFlag(Qt::FramelessWindowHint, false);
     /*
      * Linuxta pencere küçüldükten sonra, fareyle pencereyi taşıyın.
      * Resim sağdan monitorunuzun bir yerinden taşsın.
      * Çift tıklayıp window'u maximize edin. Resim hala taşmış bir şekilde duruyor olacaktır.
      * Şimdi ise tek tıklayın. Eğer küçülmüş pencere monitorunuzdan taşmamış ise taşması laızm.
-     * Linuxta denedim taşmıyor. Lakin windowsta taşacak yüksek ihtimal.
+     * Linuxta denedim taşmıyor. Lakin windowsta taşıyor.
      *
      * Resim çok küçültülse bile pencere boyutu fazla küçülmemeli. bir sınır koyulmalı.
      * Resim çok büyütülse bile pencere boyutu fazla büyük olmamalı. bir sınır koyulmalı.
      * Bu sınır belki kurucu fonksiyonda ayarlanabilir. Belki burada if ile kontrol edilebilir.
      */
-    move(label.x(), label.y());
+
+    //https://forum.qt.io/topic/99528/window-titlebar-height-example/3
+    move(label.x(), label.y() - QApplication::style()->pixelMetric(QStyle::PM_DockWidgetTitleMargin) - QApplication::style()->pixelMetric(QStyle::PM_TitleBarHeight));
+
     label.move(0,0);
     resize(label.width(), label.height());
     background.fill(Qt::white);
-    setWindowFlag(Qt::FramelessWindowHint, false);
 
     QThread::msleep(100);
     update();
